@@ -1,0 +1,25 @@
+@dcat:dataset
+title: WBCAtt: A White Blood Cell Dataset Annotated with Detailed Morphological Attributes
+description: |
+  This dataset contains detailed annotations of 11 morphological attributes for each of the 10k microscopic images of White Blood Cells.
+
+@dcat:keyword:
+  - White Blood Cells
+  - Morphological attributes
+  - Explainable AI
+
+license:
+  - @rdf:about: MIT License
+
+@dct:source: 
+  The dataset is derived from the microscopic peripheral blood cell dataset , originally published by A. Acevedo, A. Merino and S. Alférez et al. in 2020. The dataset can be found at https://data.mendeley.com/datasets/snkd93bnjr/draft?a= d9582c71- 9af0- 4e59- 9062- df30df05a121.
+
+@dcat:contactPoint:
+  - @vcard:Email: satoshi.tsutsui@ntu.edu.sg
+  - @vcard:Email: winnie.pang@ntu.edu.sg
+
+@dcat:distribution:
+  - @dcat:Distribution:
+      @dct:title: Attribute Annotation Dataset
+      @dcat:mediaType: text/csv
+      @dcat:accessURL: https://github.com/apple2373/wbcatt
