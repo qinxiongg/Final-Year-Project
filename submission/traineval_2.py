@@ -17,7 +17,7 @@ import sys
 
 
 from att_dataset import AttDataset
-from attribute_predictor import AttributePredictor
+from attribute_predictor_2 import AttributePredictor
 
 att_names = ['cell_size', 'cell_shape', 'nucleus_shape', 'nuclear_cytoplasmic_ratio', 'chromatin_density',
              'cytoplasm_vacuole', 'cytoplasm_texture', 'cytoplasm_colour', 'granule_type', 'granule_colour', 'granularity']
@@ -220,6 +220,9 @@ def main(args):
                               transform=get_transforms('test'), attribute_encoders=dataset_train.attribute_encoders)
     attribute_sizes = [len(encoder)
                        for encoder in dataset_train.attribute_encoders.values()]
+    
+    nucleus_shape_index = att_names.index('nucleus_shape')
+    
     # testing attributes should be the same set or at least subset of training
     # if testing set contains attribute value  that has not appeared in  training set, things will be broken.
     for column in dataset_val.attribute_columns + dataset_test.attribute_columns:
@@ -234,7 +237,7 @@ def main(args):
                                  num_workers=args.workers, persistent_workers=(args.workers > 0), pin_memory=True, drop_last=False)
 
     model = AttributePredictor(
-        attribute_sizes, image_encoder_output_dim, image_encoder)
+        attribute_sizes, image_encoder_output_dim, image_encoder, nucleus_shape_index=nucleus_shape_index)
     
     # print model summary
     model_path = os.path.join(log_dir, "model_structure.txt")  # Define the file path to save the model's structure
@@ -263,9 +266,17 @@ def main(args):
                 images, attribute_targets = images.cuda(), attribute_targets.cuda()
                 optimizer.zero_grad()
                 attribute_outputs = model(images)
+                
+                # Loss weighing to improve nucleus shape learning
+                nucleus_shape_weight = 2.0  # Increase this weight to prioritize nucleus shape learning
                 loss = 0
+                
                 for idx, (output, target) in enumerate(zip(attribute_outputs, attribute_targets.t())):
-                    loss += criterion(output, target)
+                    if idx == nucleus_shape_index:
+                        # Apply increased weight to nucleus shape loss
+                        loss += nucleus_shape_weight * criterion(output, target)
+                    else:
+                        loss += criterion(output, target)
                 # average loss over all attributes. just rescaling.
                 loss = loss / len(attribute_outputs)
                 loss.backward()
