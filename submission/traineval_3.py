@@ -17,10 +17,12 @@ import sys
 
 
 from att_dataset import AttDataset
-from attribute_predictor_2 import AttributePredictor
+from attribute_predictor_3 import AttributePredictor
 
-# task-specific nucleus shape attribute
+# task-specific attributes
 # no change in accuracy
+# training seems to be faster with decreased image_encoder_output_dim after linear()?
+
 
 att_names = ['cell_size', 'cell_shape', 'nucleus_shape', 'nuclear_cytoplasmic_ratio', 'chromatin_density',
              'cytoplasm_vacuole', 'cytoplasm_texture', 'cytoplasm_colour', 'granule_type', 'granule_colour', 'granularity']
@@ -224,9 +226,7 @@ def main(args):
                               transform=get_transforms('test'), attribute_encoders=dataset_train.attribute_encoders)
     attribute_sizes = [len(encoder)
                        for encoder in dataset_train.attribute_encoders.values()]
-    
-    nucleus_shape_index = att_names.index('nucleus_shape')
-    
+        
     # testing attributes should be the same set or at least subset of training
     # if testing set contains attribute value  that has not appeared in  training set, things will be broken.
     for column in dataset_val.attribute_columns + dataset_test.attribute_columns:
@@ -241,7 +241,7 @@ def main(args):
                                  num_workers=args.workers, persistent_workers=(args.workers > 0), pin_memory=True, drop_last=False)
 
     model = AttributePredictor(
-        attribute_sizes, image_encoder_output_dim, image_encoder, nucleus_shape_index=nucleus_shape_index, dropout_rate=args.dropout_rate)
+        attribute_sizes, image_encoder_output_dim, image_encoder, dropout_rate=args.dropout_rate)
     
     # print model summary
     model_path = os.path.join(log_dir, "model_structure.txt")  # Define the file path to save the model's structure
@@ -271,16 +271,11 @@ def main(args):
                 optimizer.zero_grad()
                 attribute_outputs = model(images)
                 
-                # Loss weighing to improve nucleus shape learning
-                nucleus_shape_weight = args.nucleus_shape_weight  # Increase this weight to prioritize nucleus shape learning
+                # Loss weighing
                 loss = 0
                 
                 for idx, (output, target) in enumerate(zip(attribute_outputs, attribute_targets.t())):
-                    if idx == nucleus_shape_index:
-                        # Apply increased weight to nucleus shape loss
-                        loss += nucleus_shape_weight * criterion(output, target)
-                    else:
-                        loss += criterion(output, target)
+                    loss += criterion(output, target)
                 # average loss over all attributes. just rescaling.
                 loss = loss / len(attribute_outputs)
                 loss.backward()
@@ -371,8 +366,8 @@ if __name__ == '__main__':
                         help='random seed.')
     parser.add_argument('--workers', type=int, default=8,
                         help="workers for torch.utils.data.DataLoader")
-    parser.add_argument('--nucleus_shape_weight', type=float, default=3.0, 
-                        help='Loss weight for nucleus shape')
+    # parser.add_argument('--nucleus_shape_weight', type=float, default=3.0, 
+    #                     help='Loss weight for nucleus shape')
     parser.add_argument('--dropout_rate', type=float, default=0.5, 
                         help='Dropout rate for task-specific layer')
     args = parser.parse_args()

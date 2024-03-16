@@ -1,8 +1,11 @@
 import torch.nn as nn
 import torch.nn.functional as F
 
+# MTL for nucleus shape only
+
+
 class AttributePredictor(nn.Module):
-    def __init__(self, attribute_sizes, image_encoder_output_dim, image_encoder, nucleus_shape_index):
+    def __init__(self, attribute_sizes, image_encoder_output_dim, image_encoder, nucleus_shape_index, dropout_rate):
         super().__init__()
         self.image_encoder = image_encoder
         self.attribute_sizes = attribute_sizes
@@ -15,7 +18,7 @@ class AttributePredictor(nn.Module):
                 self.attribute_predictors.append(nn.Sequential(
                     nn.Linear(image_encoder_output_dim, 256),  # Task-specific layer
                     nn.ReLU(),
-                    nn.Dropout(0.5),
+                    nn.Dropout(dropout_rate),
                     nn.Linear(256, size)  # Final layer for nucleus shape
                 ))
             else:
