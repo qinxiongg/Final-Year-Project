@@ -1,110 +1,197 @@
 import os
+import pandas as pd
+import torch
+import torch.nn as nn
 import random
-from PIL import Image
-import cv2
+import pandas as pd
+import torch.optim as optim
+
+import torch.optim as optim
+from torch.utils.data import DataLoader, Dataset
 import numpy as np
+from torchvision.models import resnet50
+from torchvision import transforms
+from tqdm import tqdm
+from PIL import Image
 
-def image_preprocessing(image_path, target_size=(256, 256)):
-    
-    image = cv2.imread(image_path)
-    cv2.imshow('image', image)
-    image_2 = image.copy()
-    image = cv2.resize(image, target_size) 
-    image_2 = cv2.resize(image_2, target_size)
-    
-    # Get green channel from image
-    _, image_G, _ = cv2.split(image)
-    cv2.imshow('image_G', image_G)
-    
-    image_2 = cv2.cvtColor(image_2, cv2.COLOR_BGR2HSV)
-    _, _, image_S = cv2.split(image_2)
-    cv2.imshow('image_S', image_S)
-    
-        # Perform Otsu's thresholding on the G channel
-    # _, binary_G = cv2.adaptiveThreshold(image_G, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY, 11, 2)
-    # _, binary_S = cv2.adaptiveThreshold(image_S, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY, 11, 2)
+from sklearn.metrics import accuracy_score, f1_score
 
-    
-    # cv2.imshow('binary_G', binary_G)
-    # cv2.imshow('binary_S', binary_S)
-    
-    nucleus_segmented = cv2.subtract(image_S, image_G)
-    cv2.imshow('nucleus_segmented', nucleus_segmented)
-    # # Adjust gray levels
-    # # Threshold the grayscale image
-    _, binary_mask = cv2.threshold(nucleus_segmented, 90, 255, cv2.THRESH_BINARY)
-    
 
+def set_seed(seed=42):
+    """Set the seed for reproducibility."""
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)  # if using multi-GPU
+    os.environ['PYTHONHASHSEED'] = str(seed)
     
-    # Apply the binary mask to the original image
-    adjusted_image = cv2.bitwise_and(nucleus_segmented, nucleus_segmented, mask=binary_mask)
-    cv2.imshow('adjusted_image', adjusted_image)
-    
-    # # Apply morphological operations
-    # kernel = np.ones((5,5), np.uint8)
-    # adjusted_image2 = cv2.dilate(adjusted_image, kernel, iterations=1)
-    # adjusted_image2 = cv2.erode(adjusted_image2, kernel, iterations=2)
-
-    # cv2.imshow('morp image', adjusted_image2)
-    
-    # Crop out the nucleus area
-    cropped_nucleus = crop_nucleus(adjusted_image, binary_mask)
-    cv2.imshow('cropped_nucleus', cropped_nucleus)
+    # Optional: Set for deterministic behavior
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
     
 
 
-
-    cv2.waitKey(0)
-    cv2.destroyAllWindows()
-
-
-    return 0
-
-def crop_nucleus(image, binary_mask):
-    # Find contours in the binary mask
-    contours, _ = cv2.findContours(binary_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    
-    # Find the contour with the largest area
-    largest_contour = max(contours, key=cv2.contourArea)
-    
-    # Get the bounding box of the largest contour
-    x, y, w, h = cv2.boundingRect(largest_contour)
-    
-    # Crop the original image using the bounding box coordinates
-    cropped_nucleus = image[y:y+h, x:x+w]
-    
-    return cropped_nucleus
-
-def random_image_from_subfolder(root_folder):
-
-    # List all subofolders in root folder
-    subfolders = [f for f in os.listdir(root_folder) if os.path.isdir(os.path.join(root_folder,f))]
-    if not subfolders:
-        raise ValueError("No subfolders found in root folder")
+class PBCTorchDataset(Dataset):
+    def __init__(self, csv_file, img_dir, transform=None):
+        """
+        Args:
+            csv_file (string): Path to the csv file with annotations.
+            transform (callable, optional): Optional transform to be applied on a sample.
+        """
+        self.cell_frame = pd.read_csv(csv_file)
+        self.img_dir = img_dir
+        self.transform = transform
         
-    # Choose a random subfolder
-    random_subfolder = random.choice(subfolders)
-    subfolder_path = os.path.join(root_folder, random_subfolder)
+        # Define mapping for categorical attributes
+        self.label_mapping = {
+            'cell_size': {'small': 0, 'big': 1},
+            'cell_shape': {'round': 0, 'irregular': 1},
+            
+            
+            # Add other attributes here following the same structure
+        }
+        
+    def __len__(self):
+        return len(self.cell_frame)
+
+    def __getitem__(self, idx):
+        img_path = os.path.join(self.img_dir, self.cell_frame.iloc[idx]['path'])
+        image = Image.open(img_path).convert('RGB')  # Load image as PIL Image
+        labels = self._encode_attributes(idx)
+        
+        if self.transform:
+            image = self.transform(image)
+            
+        return image, labels
     
-    # List all iamges in the choosen subfolder
-    images = os.listdir(subfolder_path)
-    if not images:
-        raise ValueError("No images found in subfolder")
+    def _encode_attributes(self, idx):
+        # Encode attributes into binary vector
+        labels = []
+        for attr, mapping in self.label_mapping.items():
+            attr_value = self.cell_frame.iloc[idx][attr]
+            encoded = [0] * len(mapping)  # Assuming binary attributes for simplicity
+            if attr_value in mapping:
+                encoded[mapping[attr_value]] = 1
+            labels.extend(encoded)
+        return torch.tensor(labels, dtype=torch.float32)
     
-    # Choose a random image from the subfolder
-    selected_image = random.choice(images)
-    # Construct full path to image
-    image_path = os.path.join(subfolder_path, selected_image)
+transform = transforms.Compose([
+            transforms.Resize(256),
+            transforms.RandomCrop((224, 224)),
+            transforms.ToTensor(),
+            transforms.RandomHorizontalFlip(),
+            transforms.RandomVerticalFlip(),
+            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+])
+
+def create_model(num_classes):
+    model = resnet50(pretrained=True)
+    num_ftrs = model.fc.in_features
+    model.fc = nn.Linear(num_ftrs, num_classes)  # Adjusting for our number of classes
+    return model
+
+def load_or_train_model(model_path, model, train_loader, val_loader, test_loader, criterion, optimizer, num_epochs=10, device="cuda"):
+    if os.path.exists(model_path):
+        print("Loading saved model from:", model_path)
+        model.load_state_dict(torch.load(model_path))
+    else:
+        print("Training new model.")
+        train_and_evaluate(model, train_loader, val_loader, test_loader, criterion, optimizer, num_epochs, device)
+        torch.save(model.state_dict(), model_path)
+        print("Model saved to:", model_path)
+    model.to(device)
+
+def train_and_evaluate(model, train_loader, val_loader, test_loader, criterion, optimizer, num_epochs=10, device="cuda"):
+    best_val_loss = float('inf')
+    best_model_state = None
+
+    for epoch in range(num_epochs):
+        model.train()
+        total_loss = 0
+        for images, labels in tqdm(train_loader, desc=f"Epoch {epoch+1}/{num_epochs}", unit="batch"):
+            images, labels = images.to(device), labels.to(device)
+            optimizer.zero_grad()
+            outputs = model(images)
+            loss = criterion(outputs, labels)
+            loss.backward()
+            optimizer.step()
+            total_loss += loss.item()
+
+        avg_train_loss = total_loss / len(train_loader)
+        val_loss, val_accuracy, val_f1 = evaluate_model(model, val_loader, criterion, device)
+        
+        print(f"Epoch [{epoch+1}/{num_epochs}] Train Loss: {avg_train_loss:.4f}, Val Loss: {val_loss:.4f}, Val Accuracy: {val_accuracy:.4f}, Val F1: {val_f1:.4f}")
+
+        if val_loss < best_val_loss:
+            best_val_loss = val_loss
+            best_model_state = model.state_dict().copy()  # Deep copy the model state
+
+    print("Training completed.")
     
-    return image_path
+    # After completing all epochs, load the best model and evaluate it on the test set.
+    model.load_state_dict(best_model_state)
+    test_loss, test_accuracy, test_f1 = evaluate_model(model, test_loader, criterion, device)
+    print(f"Test Loss: {test_loss:.4f}, Test Accuracy: {test_accuracy:.4f}, Test F1: {test_f1:.4f}")
 
-root_folder =  "C:\\Users\\tanqi\\Documents\\FYP\\Final Year Project\\submission\\data\\PBC\\PBC_dataset_normal_DIB"
-selected_image_path = random_image_from_subfolder(root_folder)
-image = image_preprocessing(selected_image_path)
-image.show()
-
-
+    # Optionally save the best model
+    torch.save(best_model_state, "best_model.pth")
+    print("Best model saved to best_model.pth")
+          
+def evaluate_model(model, dataloader, criterion, device="cuda", threshold=0.5):
     
+    model.eval()
+    total_loss = 0.0
+    all_predictions = []
+    all_true_labels = []
+    with torch.no_grad():
+        for images, labels in tqdm(dataloader, desc="Evaluating", leave=False):
+            images, labels = images.to(device), labels.to(device)
+            outputs = model(images)
+            loss = criterion(outputs, labels)
+            total_loss += loss.item()
+            
+            # Convert model outputs to binary labels
+            predicted_labels = (torch.sigmoid(outputs) > threshold).int()
+            all_predictions.append(predicted_labels.cpu())
+            all_true_labels.append(labels.cpu())
+    
+    # Concatenate all batches
+    all_predictions = torch.cat(all_predictions, dim=0).numpy()
+    all_true_labels = torch.cat(all_true_labels, dim=0).numpy()
+    
+    # Calculate metrics
+    avg_loss = total_loss / len(dataloader)
+    accuracy = accuracy_score(all_true_labels, all_predictions)
+    f1 = f1_score(all_true_labels, all_predictions, average='macro')
+    
+    return avg_loss, accuracy, f1
 
+if __name__ == "__main__":
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+    set_seed(42)  # Ensure seed is set before model initialization for reproducibility
 
+    # Instantiate the model and move it to the appropriate device
+    model = create_model(num_classes=4)  # Adjust num_classes based on your task
+    model.to(device)
+
+    # Define the loss function (criterion) and the optimizer
+    criterion = nn.BCEWithLogitsLoss()
+    optimizer = optim.Adam(model.parameters(), lr=0.001)
+
+    # Prepare the data loaders
+    train_dataset = PBCTorchDataset(csv_file='./pbc_attr_v1_train.csv', img_dir='./data/PBC/', transform=transform)
+    val_dataset = PBCTorchDataset(csv_file='./pbc_attr_v1_val.csv', img_dir='./data/PBC/', transform=transform)
+    test_dataset = PBCTorchDataset(csv_file='./pbc_attr_v1_test.csv', img_dir='./data/PBC/', transform=transform)
+
+    num_workers = 8  # Adjust based on your system's capabilities
+    train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True, num_workers=num_workers)
+    val_loader = DataLoader(val_dataset, batch_size=32, shuffle=False, num_workers=num_workers)
+    test_loader = DataLoader(test_dataset, batch_size=32, shuffle=False, num_workers=num_workers)
+
+    num_epochs = 10  # Adjust based on your preference
+    model_path = "best_model.pth"  # Path where the best model is saved or to be saved
+
+    # Decide to load or train the model based on the existence of the model file
+    load_or_train_model(model_path, model, train_loader, val_loader, test_loader, criterion, optimizer, num_epochs, device)
