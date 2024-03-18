@@ -19,9 +19,6 @@ import sys
 from att_dataset import AttDataset
 from attribute_predictor_4 import AttributePredictor
 
-# Use the same image_encoder_output_dim of 2048 in attribute and overall layer like in the original traineval.py
-# no significant increaase in accuracy
-
 att_names = ['cell_size', 'cell_shape', 'nucleus_shape', 'nuclear_cytoplasmic_ratio', 'chromatin_density',
              'cytoplasm_vacuole', 'cytoplasm_texture', 'cytoplasm_colour', 'granule_type', 'granule_colour', 'granularity']
 
@@ -102,7 +99,7 @@ def get_transforms(split, mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
         return transforms.Compose([
             transforms.Resize(256),
             transforms.RandomCrop((224, 224)),
-            transforms.ToTensor(),    
+            transforms.ToTensor(),
             transforms.RandomRotation(degrees=90), # added random rotation
             transforms.RandomHorizontalFlip(),
             transforms.RandomVerticalFlip(),
@@ -199,9 +196,7 @@ def evaluate(model, dataloader):
 
 def main(args):
     print(args)
-    # Check if GPU is available and set the device accordingly
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(f"Using device: {device}")
+
     # set seed
     make_deterministic(args.seed)
 
@@ -226,7 +221,6 @@ def main(args):
                               transform=get_transforms('test'), attribute_encoders=dataset_train.attribute_encoders)
     attribute_sizes = [len(encoder)
                        for encoder in dataset_train.attribute_encoders.values()]
-        
     # testing attributes should be the same set or at least subset of training
     # if testing set contains attribute value  that has not appeared in  training set, things will be broken.
     for column in dataset_val.attribute_columns + dataset_test.attribute_columns:
@@ -239,9 +233,9 @@ def main(args):
                                 num_workers=args.workers, persistent_workers=(args.workers > 0), pin_memory=True, drop_last=False)
     dataloader_test = DataLoader(dataset_test, batch_size=args.batch_size, shuffle=False,
                                  num_workers=args.workers, persistent_workers=(args.workers > 0), pin_memory=True, drop_last=False)
-
+    nucleus_shape_idx = 2
     model = AttributePredictor(
-        attribute_sizes, image_encoder_output_dim, image_encoder, dropout_rate=args.dropout_rate)
+        attribute_sizes, image_encoder_output_dim, image_encoder, nucleus_shape_idx)
     
     # print model summary
     model_path = os.path.join(log_dir, "model_structure.txt")  # Define the file path to save the model's structure
@@ -270,10 +264,7 @@ def main(args):
                 images, attribute_targets = images.cuda(), attribute_targets.cuda()
                 optimizer.zero_grad()
                 attribute_outputs = model(images)
-                
-                # Loss weighing
                 loss = 0
-                
                 for idx, (output, target) in enumerate(zip(attribute_outputs, attribute_targets.t())):
                     loss += criterion(output, target)
                 # average loss over all attributes. just rescaling.
@@ -348,12 +339,12 @@ if __name__ == '__main__':
                         help='Number of training epochs')
     parser.add_argument('--epoch_multiply', type=int, default=1,
                         help='Number of times to repeat the dataset in each epoch')
-    parser.add_argument('--lr', type=float, default=0.00005,
+    parser.add_argument('--lr', type=float, default=0.0001,
                         help='Learning rate')
     parser.add_argument('--decay', type=float,
                         default=0.01, help="weight decay")
     parser.add_argument('--batch_size', type=int,
-                        default=16, help='Batch size')
+                        default=32, help='Batch size')
     parser.add_argument('--eval_metric', default='f1_macro',
                         help='Evaluation metric for model selection')
     parser.add_argument('--backbone', default='resnet50',
@@ -366,9 +357,5 @@ if __name__ == '__main__':
                         help='random seed.')
     parser.add_argument('--workers', type=int, default=8,
                         help="workers for torch.utils.data.DataLoader")
-    # parser.add_argument('--nucleus_shape_weight', type=float, default=3.0, 
-    #                     help='Loss weight for nucleus shape')
-    parser.add_argument('--dropout_rate', type=float, default=0.5, 
-                        help='Dropout rate for task-specific layer')
     args = parser.parse_args()
     main(args)
