@@ -17,7 +17,8 @@ import sys
 
 
 from att_dataset import AttDataset
-from attribute_predictor_4 import AttributePredictor
+from attribute_predictor import AttributePredictor
+
 
 att_names = ['cell_size', 'cell_shape', 'nucleus_shape', 'nuclear_cytoplasmic_ratio', 'chromatin_density',
              'cytoplasm_vacuole', 'cytoplasm_texture', 'cytoplasm_colour', 'granule_type', 'granule_colour', 'granularity']
@@ -233,9 +234,8 @@ def main(args):
                                 num_workers=args.workers, persistent_workers=(args.workers > 0), pin_memory=True, drop_last=False)
     dataloader_test = DataLoader(dataset_test, batch_size=args.batch_size, shuffle=False,
                                  num_workers=args.workers, persistent_workers=(args.workers > 0), pin_memory=True, drop_last=False)
-    nucleus_shape_idx = 2
     model = AttributePredictor(
-        attribute_sizes, image_encoder_output_dim, image_encoder, nucleus_shape_idx)
+        attribute_sizes, image_encoder_output_dim, image_encoder)
     
     # print model summary
     model_path = os.path.join(log_dir, "model_structure.txt")  # Define the file path to save the model's structure
