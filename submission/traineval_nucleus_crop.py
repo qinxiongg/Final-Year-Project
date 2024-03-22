@@ -16,12 +16,13 @@ from torchsummary import summary
 import sys
 
 
-from att_dataset import AttDataset
-from attribute_predictor import AttributePredictor
+from att_dataset_nucleus import AttDataset
+from attribute_predictor_SEB import AttributePredictor
 
+# att_names = ['cell_size', 'cell_shape', 'nucleus_shape', 'nuclear_cytoplasmic_ratio', 'chromatin_density',
+#              'cytoplasm_vacuole', 'cytoplasm_texture', 'cytoplasm_colour', 'granule_type', 'granule_colour', 'granularity']
 
-att_names = ['cell_size', 'cell_shape', 'nucleus_shape', 'nuclear_cytoplasmic_ratio', 'chromatin_density',
-             'cytoplasm_vacuole', 'cytoplasm_texture', 'cytoplasm_colour', 'granule_type', 'granule_colour', 'granularity']
+att_names = ['nucleus_shape']
 
 class RedirectPrintToFile:
     """A context manager for redirecting stdout to a file."""
@@ -100,8 +101,8 @@ def get_transforms(split, mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
         return transforms.Compose([
             transforms.Resize(256),
             transforms.RandomCrop((224, 224)),
+            transforms.RandomRotation(90),
             transforms.ToTensor(),
-            transforms.RandomRotation(degrees=90), # added random rotation
             transforms.RandomHorizontalFlip(),
             transforms.RandomVerticalFlip(),
             transforms.Normalize(mean=mean, std=std)
@@ -109,7 +110,7 @@ def get_transforms(split, mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
     else:
         return transforms.Compose([
             transforms.Resize(256),
-            transforms.CenterCrop((224, 224)),
+            # transforms.CenterCrop((224, 224)),
             transforms.ToTensor(),
             transforms.Normalize(mean=mean, std=std)
         ])
@@ -234,6 +235,7 @@ def main(args):
                                 num_workers=args.workers, persistent_workers=(args.workers > 0), pin_memory=True, drop_last=False)
     dataloader_test = DataLoader(dataset_test, batch_size=args.batch_size, shuffle=False,
                                  num_workers=args.workers, persistent_workers=(args.workers > 0), pin_memory=True, drop_last=False)
+
     model = AttributePredictor(
         attribute_sizes, image_encoder_output_dim, image_encoder)
     

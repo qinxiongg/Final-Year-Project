@@ -54,15 +54,16 @@ def HSV_preprocessing(image_path, target_size=(256, 256)):
     cv2.waitKey(0)
     cv2.destroyAllWindows()
 
-def crop_preprocessing(image_path, min_size=(150, 150)):
+def crop_preprocessing(image_path, crop_size=(150, 150)):
 
     # image = cv2.imread(image_path)
     image = Image.open(image_path)
-    assert image is not None, "Image not found"
+    # image.show()
 
     #convert PIL image to opencv format
     image = np.array(image)
     image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+    cv2.imshow('Original Image', image)
     
     # Convert to HSV color space and split channels
     hsv_image = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
@@ -75,33 +76,67 @@ def crop_preprocessing(image_path, min_size=(150, 150)):
     subtracted_image = cv2.subtract(s, g)
     # cv2.imshow('Subtracted Image', subtracted_image)
     
-    
     # Threshold the subtracted image
     _, thresh = cv2.threshold(subtracted_image, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    # cv2.imshow('Threshold Image', thresh)   
+    
+    # Dilate the thresholded image 
+    kernel = np.ones((5,5),np.uint8)
+    dilated_thresh = cv2.dilate(thresh, kernel, iterations = 1)
+    cv2.imshow('Dilated Image', dilated_thresh)
 
     # Find contours
-    contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    contours, hierarchy = cv2.findContours(dilated_thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
     # Assuming the largest contour is the nucleus, if not empty
     if contours:
+        
         largest_contour = max(contours, key=cv2.contourArea)
         x, y, w, h = cv2.boundingRect(largest_contour)
+        
+        # # Draw the bounding box on the original image
+        # cv2.rectangle(image, (x, y), (x + w, y + h), (0, 255, 0), 2)
+        # cv2.imshow('Image with Bounding Box', image)
 
-        # Enforce minimum size
-        w = max(w, min_size[0])
-        h = max(h, min_size[1])
+        # # Enforce minimum size
+        # w = max(w, min_size[0])
+        # h = max(h, min_size[1])
 
-        # Crop with the adjusted size, centering the crop around the original bounding box as much as possible
+        # # Crop with the adjusted size, centering the crop around the original bounding box as much as possible
+        # center_x, center_y = x + w // 2, y + h // 2
+        # x = max(center_x - w // 2, 0)
+        # y = max(center_y - h // 2, 0)
+        # x_end = min(x + w, image.shape[1])
+        # y_end = min(y + h, image.shape[0])
+
+        # cropped_nucleus = image[y:y_end, x:x_end]
+        # cv2.imshow('Cropped Nucleus', cropped_nucleus)
+        
+        # Calculate the center of the bounding box
         center_x, center_y = x + w // 2, y + h // 2
-        x = max(center_x - w // 2, 0)
-        y = max(center_y - h // 2, 0)
-        x_end = min(x + w, image.shape[1])
-        y_end = min(y + h, image.shape[0])
 
-        cropped_nucleus = image[y:y_end, x:x_end]
+        # Define the new crop dimensions
+        new_w, new_h = crop_size
 
-        # # Crop the image to the bounding rectangle of the largest contour
-        # cropped_nucleus = image[y:y+h, x:x+w]
+        # Calculate the top left corner of the new crop area
+        new_x = max(center_x - new_w // 2, 0)
+        new_y = max(center_y - new_h // 2, 0)
+
+        # Make sure the crop area does not go out of the image
+        new_x_end = min(new_x + new_w, image.shape[1])
+        new_y_end = min(new_y + new_h, image.shape[0])
+
+        # Adjust the starting point if necessary to fit the expected size
+        if new_x_end - new_x < new_w:
+            new_x = new_x_end - new_w
+        if new_y_end - new_y < new_h:
+            new_y = new_y_end - new_h
+
+        # Crop the image
+        cropped_nucleus = image[new_y:new_y_end, new_x:new_x_end]
+        
+        # Show the cropped nucleus
+        cv2.imshow('Cropped Nucleus', cropped_nucleus)
        
         # convert to BGR format
         cropped_nucleus = cv2.cvtColor(cropped_nucleus, cv2.COLOR_BGR2RGB)
@@ -113,7 +148,6 @@ def crop_preprocessing(image_path, min_size=(150, 150)):
 
     else:
         raise ValueError("No contours found in the image.")
-    
     cv2.waitKey(0)
     cv2.destroyAllWindows()
 
@@ -145,7 +179,7 @@ root_folder =  "./data/PBC/PBC_dataset_normal_DIB"
 while True:
     selected_image_path = random_image_from_subfolder(root_folder)
     image = crop_preprocessing(selected_image_path)
-    key = cv2.waitKey(0) & 0xFF  # Wait indefinitely for a key press, mask for compatibility
-    if key == ord('q'):  # Exit the loop if 'q' is pressed
+    key = cv2.waitKey(0) & 0xFF
+    if key == ord('q'):
         break
-cv2.destroyAllWindows()  # Close windows to avoid a buildup of windows
+       # Close the current image window before the next loop iteration
