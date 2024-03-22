@@ -151,6 +151,58 @@ def crop_preprocessing(image_path, crop_size=(150, 150)):
     cv2.waitKey(0)
     cv2.destroyAllWindows()
 
+def nucleus_segmentation(image_path, crop_size=(150, 150)):
+
+    # image = cv2.imread(image_path)
+    image = Image.open(image_path)
+    # image.show()
+
+    #convert PIL image to opencv format
+    image = np.array(image)
+    image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+    cv2.imshow('Original Image', image)
+    
+    # Convert to HSV color space and split channels
+    hsv_image = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+    h, s, v = cv2.split(hsv_image)
+
+    # Split RGB channels
+    b, g, r = cv2.split(image)
+
+    # Subtract the S channel with the G channel
+    subtracted_image = cv2.subtract(s, g)
+    # cv2.imshow('Subtracted Image', subtracted_image)
+    
+    # Threshold the subtracted image
+    _, thresh = cv2.threshold(subtracted_image, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    # cv2.imshow('Threshold Image', thresh)   
+    
+    # Dilate the thresholded image 
+    kernel = np.ones((5,5),np.uint8)
+    dilated_thresh = cv2.dilate(thresh, kernel, iterations = 1)
+    cv2.imshow('Dilated Image', dilated_thresh)
+
+    # Convert the binary threshold image to 3 channels
+    thresh_3_channel = cv2.merge([dilated_thresh, dilated_thresh, dilated_thresh])
+
+    # Find contours
+    contours, hierarchy = cv2.findContours(dilated_thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+    # Element-wise multiplication of the binary threshold with the original image
+    segmented = cv2.multiply(image, thresh_3_channel, scale=1/255)
+    cv2.imshow('Segmented Image', segmented)
+
+    # convert to BGR format
+    segmented = cv2.cvtColor(segmented, cv2.COLOR_BGR2RGB)
+    # convert to PIL format
+    segmented = Image.fromarray(segmented)
+
+    # show the subtracted image
+    segmented.show()
+
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
+
 def random_image_from_subfolder(root_folder):
 
     # List all subofolders in root folder
@@ -178,7 +230,7 @@ def random_image_from_subfolder(root_folder):
 root_folder =  "./data/PBC/PBC_dataset_normal_DIB"
 while True:
     selected_image_path = random_image_from_subfolder(root_folder)
-    image = crop_preprocessing(selected_image_path)
+    image = nucleus_segmentation(selected_image_path)
     key = cv2.waitKey(0) & 0xFF
     if key == ord('q'):
         break

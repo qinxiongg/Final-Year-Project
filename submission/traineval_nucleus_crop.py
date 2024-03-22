@@ -17,7 +17,7 @@ import sys
 
 
 from att_dataset_nucleus import AttDataset
-from attribute_predictor_SEB import AttributePredictor
+from attribute_predictor import AttributePredictor
 
 # att_names = ['cell_size', 'cell_shape', 'nucleus_shape', 'nuclear_cytoplasmic_ratio', 'chromatin_density',
 #              'cytoplasm_vacuole', 'cytoplasm_texture', 'cytoplasm_colour', 'granule_type', 'granule_colour', 'granularity']
@@ -101,6 +101,7 @@ def get_transforms(split, mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
         return transforms.Compose([
             transforms.Resize(256),
             transforms.RandomCrop((224, 224)),
+            # transforms.ElasticTransform(),
             transforms.RandomRotation(90),
             transforms.ToTensor(),
             transforms.RandomHorizontalFlip(),

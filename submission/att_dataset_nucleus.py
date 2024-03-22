@@ -46,7 +46,7 @@ class AttDataset(Dataset):
             idx = idx.tolist()
         image_path = os.path.join(self.image_dir, self.df.loc[idx, 'path'])
         image = self.loader(image_path)
-        image = self.nucleus_crop(image)  # Apply nucleus preprocessing
+        image = self.nucleus_segmentation(image)  # Apply nucleus preprocessing
         attributes = [self.attribute_encoders[col][self.df.loc[idx, col]]
                       for col in self.attribute_columns]
         sample = {'image': image, 'attributes': torch.tensor(
@@ -145,3 +145,40 @@ class AttDataset(Dataset):
             raise ValueError("No contours found in the image.")
         
         return processed_image
+    
+    def nucleus_segmentation(self, image):
+
+        #convert PIL image to opencv format
+        image = np.array(image)
+        image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+        
+        # Convert to HSV color space and split channels
+        hsv_image = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+        h, s, v = cv2.split(hsv_image)
+
+        # Split RGB channels
+        b, g, r = cv2.split(image)
+
+        # Subtract the S channel with the G channel
+        subtracted_image = cv2.subtract(s, g)
+        
+        # Threshold the subtracted image
+        _, thresh = cv2.threshold(subtracted_image, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+        
+        # Dilate the thresholded image 
+        kernel = np.ones((5,5),np.uint8)
+        dilated_thresh = cv2.dilate(thresh, kernel, iterations = 1)
+
+        # Convert the binary threshold image to 3 channels
+        thresh_3_channel = cv2.merge([dilated_thresh, dilated_thresh, dilated_thresh])
+
+
+        # Element-wise multiplication of the binary threshold with the original image
+        segmented = cv2.multiply(image, thresh_3_channel, scale=1/255)
+
+        # convert to BGR format
+        segmented = cv2.cvtColor(segmented, cv2.COLOR_BGR2RGB)
+        # convert to PIL format
+        segmented = Image.fromarray(segmented)
+
+        return segmented
