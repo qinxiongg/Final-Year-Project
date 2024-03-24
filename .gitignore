@@ -2,6 +2,6 @@ submission/data/
 submission/log/
 submission/__pycache__/
 submission/re-annotation/
-submission/annotation_count.ipynb
+submission/data_visualisation.ipynb
 submission/nucleus_predictor_old.py
 submission/nucleus_predictor.py
