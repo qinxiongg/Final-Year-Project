@@ -8,7 +8,7 @@ class AttributePredictor(nn.Module):
         super().__init__()
         self.image_encoder = image_encoder
         
-        for layer_name in ['layer1', 'layer2', 'layer3', 'layer4']:
+        for layer_name in ['layer3', 'layer4']:
             layer = getattr(image_encoder, layer_name)
             for block in layer:
                 block.conv2 = nn.Sequential(

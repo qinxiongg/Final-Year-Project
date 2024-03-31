@@ -46,7 +46,7 @@ class AttDataset(Dataset):
             idx = idx.tolist()
         image_path = os.path.join(self.image_dir, self.df.loc[idx, 'path'])
         image = self.loader(image_path)
-        image = self.nucleus_segmentation(image)  # Apply nucleus preprocessing
+        image = self.nucleus_crop(image)  # Apply nucleus preprocessing
         attributes = [self.attribute_encoders[col][self.df.loc[idx, col]]
                       for col in self.attribute_columns]
         sample = {'image': image, 'attributes': torch.tensor(
@@ -81,68 +81,67 @@ class AttDataset(Dataset):
         
         return processed_image
     
-    def nucleus_crop(self, image, crop_size=(150, 150)):
+    def nucleus_crop(self, image, min_size=(150, 150)):
 
         #convert PIL image to opencv format
         image = np.array(image)
         image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
                 
-        # Convert to image to HSV color space and split channels
+        # Convert to image to HSV color space and split the channels
         HSV_image = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
         H, S, V = cv2.split(HSV_image)
 
-        # Split RGB channels 
+        # Split BGR channels 
         B, G, R = cv2.split(image)
 
         # Subtract the S channel with the G channel
         subtracted_image = cv2.subtract(S, G)
         
         # Threshold the subtracted image
-        ret, thresh = cv2.threshold(subtracted_image, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+        ret, thresholded_image = cv2.threshold(subtracted_image, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
         
         # Dilate the thresholded image improve contour detection
         kernel = np.ones((5,5),np.uint8)
-        dilated_threshold_image = cv2.dilate(thresh, kernel, iterations = 1)
+        dilated_threshold_image = cv2.dilate(thresholded_image, kernel, iterations = 1)
 
         # Find contours
         contours, hierarchy = cv2.findContours(dilated_threshold_image, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
         # Assuming the largest contour is the nucleus, if not empty
         if contours:
-            
+    
             largest_contour = max(contours, key=cv2.contourArea)
-            x, y, w, h = cv2.boundingRect(largest_contour)
+            original_x, original_y, original_w, original_h = cv2.boundingRect(largest_contour)
             
-            # Calculate the center of the bounding box
-            center_x, center_y = x + w // 2, y + h // 2
+            # Calculate the center of the original bounding box
+            original_center_x = original_x + original_w // 2
+            original_center_y = original_y + original_h // 2
 
-            # fix crop dimension
-            crop_w, crop_h = crop_size 
+            # Enforce minimum size, ensuring it's centered around the original bounding box
+            w = max(original_w, min_size[0])
+            h = max(original_h, min_size[1])
 
-            # Calculate the top left corner of the new crop area
-            new_x = max(center_x - crop_w // 2, 0)
-            new_y = max(center_y - crop_h // 2, 0)
+            # Adjust x and y to crop the image around the center of the bounding box
+            new_x = max(original_center_x - w // 2, 0)
+            new_y = max(original_center_y - h // 2, 0)
 
-            # Make sure the crop area does not go out of the image
-            new_x_end = min(new_x + crop_w, image.shape[1])
-            new_y_end = min(new_y + crop_w, image.shape[0])
+            # Adjust the end points, making sure we don't go out of the image boundaries
+            new_x_end = min(new_x + w, image.shape[1])
+            new_y_end = min(new_y + h, image.shape[0])
 
-            # Adjust the starting point if necessary to fit the expected size
-            if new_x_end - new_x < crop_w:
-                new_x = new_x_end - crop_w
-            if new_y_end - new_y < crop_h:
-                new_y = new_y_end - crop_h
+            # Correct the coordinates if they go out of bounds
+            if new_x_end > image.shape[1]:
+                new_x = image.shape[1] - w
+            if new_y_end > image.shape[0]:
+                new_y = image.shape[0] - h
 
-            # Crop the image
+            # Crop the image with the adjusted coordinates
             cropped_nucleus = image[new_y:new_y_end, new_x:new_x_end]
         
-            # convert to BGR format
+            # convert to back to RGB format for conversion back to PIL
             cropped_nucleus = cv2.cvtColor(cropped_nucleus, cv2.COLOR_BGR2RGB)
             # convert to PIL format
             processed_image = Image.fromarray(cropped_nucleus)
-        
-        else:
-            raise ValueError("No contours found in the image.")
         
         return processed_image
     
@@ -172,13 +171,12 @@ class AttDataset(Dataset):
         # Convert the binary threshold image to 3 channels
         thresh_3_channel = cv2.merge([dilated_thresh, dilated_thresh, dilated_thresh])
 
-
         # Element-wise multiplication of the binary threshold with the original image
-        segmented = cv2.multiply(image, thresh_3_channel, scale=1/255)
+        segmented_image = cv2.multiply(image, thresh_3_channel, scale=1/255)
 
         # convert to BGR format
-        segmented = cv2.cvtColor(segmented, cv2.COLOR_BGR2RGB)
+        segmented_image = cv2.cvtColor(segmented_image, cv2.COLOR_BGR2RGB)
         # convert to PIL format
-        segmented = Image.fromarray(segmented)
+        segmented_image = Image.fromarray(segmented_image)
 
-        return segmented
+        return segmented_image

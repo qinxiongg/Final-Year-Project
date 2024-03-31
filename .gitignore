@@ -5,3 +5,6 @@ submission/re-annotation/
 submission/data_visualisation.ipynb
 submission/nucleus_predictor_old.py
 submission/nucleus_predictor.py
+submission/segmented_image.jpg
+submission/seg_image.jpg
+submission/cropped_image.jpg
