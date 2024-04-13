@@ -8,3 +8,6 @@ submission/nucleus_predictor.py
 submission/segmented_image.jpg
 submission/seg_image.jpg
 submission/cropped_image.jpg
+submission/flagged/log.csv
+submission/flagged/image/78ed0e5d141221842d2b/cropped_image.jpg
+submission/flagged/image/977a4396d1fc286a06a7/cropped_image.jpg

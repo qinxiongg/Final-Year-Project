@@ -8,7 +8,7 @@ class AttributePredictor(nn.Module):
         super().__init__()
         self.image_encoder = image_encoder
         
-        for layer_name in ['layer3', 'layer4']:
+        for layer_name in ['layer1', 'layer2', 'layer3', 'layer4']:
             layer = getattr(image_encoder, layer_name)
             for block in layer:
                 block.conv2 = nn.Sequential(
@@ -22,10 +22,9 @@ class AttributePredictor(nn.Module):
         # Apply Kaiming initialization to the attribute predictors
         for predictor in self.attribute_predictors:
             nn.init.kaiming_normal_(predictor.weight, nonlinearity='relu')
-            nn.init.zeros_(predictor.bias)
             
     def predict_from_features(self, x):
-        # Predict each attribute
+        # Predict each attribute    
         outputs = [predictor(x) for predictor in self.attribute_predictors]
         return outputs
 

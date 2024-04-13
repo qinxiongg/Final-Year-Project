@@ -203,7 +203,7 @@ def nucleus_segmentation(image_path, crop_size=(150, 150)):
     # cv2.imshow('Subtracted Image', subtracted_image)
     
     # Threshold the subtracted image
-    _, thresh = cv2.threshold(subtracted_image, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    _, thresh = cv2.threshold(subtracted_image, 0, 255, cv2.THRESH_OTSU)
     cv2.imshow('Threshold Image', thresh)   
     
     # Dilate the thresholded image 
@@ -258,7 +258,7 @@ def random_image_from_subfolder(root_folder):
     return image_path
 
 image_path = "./data/PBC/PBC_dataset_normal_DIB/neutrophil/SNE_70096.jpg"
-image = crop_preprocessing(image_path)
+image = nucleus_segmentation(image_path)
 # root_folder =  "./data/PBC/PBC_dataset_normal_DIB"
 # while True:
 #     selected_image_path = random_image_from_subfolder(root_folder)

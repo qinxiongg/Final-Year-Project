@@ -54,32 +54,6 @@ class AttDataset(Dataset):
         if self.transform:
             sample['image'] = self.transform(sample['image'])
         return sample
-
-    def nucleus_grayscale(self, image):
-        
-        # convert PIL image to opencv format if not already
-        # if not isinstance(image, np.ndarray):
-        image = np.array(image)
-        image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
-        image_copy = image.copy()
-        
-        # Split original image into BGR channels
-        B, G, R = cv2.split(image)
-        
-        # Convert to image_copy to HSV and split channels
-        image_copy = cv2.cvtColor(image_copy, cv2.COLOR_BGR2HSV)
-        H, S, V = cv2.split(image_copy)
-
-        # Subtract the S channel with the G channel
-        processed_image = cv2.subtract(S, G)
-        
-        # convert to from greyscale to BGR format
-        processed_image = cv2.cvtColor(processed_image, cv2.COLOR_GRAY2BGR)
-        
-        # Convert processed_image back to PIL Image
-        processed_image = Image.fromarray(processed_image)
-        
-        return processed_image
     
     def nucleus_crop(self, image, min_size=(150, 150)):
 
@@ -98,9 +72,9 @@ class AttDataset(Dataset):
         subtracted_image = cv2.subtract(S, G)
         
         # Threshold the subtracted image
-        ret, thresholded_image = cv2.threshold(subtracted_image, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+        ret, thresholded_image = cv2.threshold(subtracted_image, 0, 255, cv2.THRESH_OTSU)
         
-        # Dilate the thresholded image improve contour detection
+        # Dilate the thresholded image to improve contour detection
         kernel = np.ones((5,5),np.uint8)
         dilated_threshold_image = cv2.dilate(thresholded_image, kernel, iterations = 1)
 
@@ -138,7 +112,7 @@ class AttDataset(Dataset):
             # Crop the image with the adjusted coordinates
             cropped_nucleus = image[new_y:new_y_end, new_x:new_x_end]
         
-            # convert to back to RGB format for conversion back to PIL
+            # convert back to RGB format for conversion back to PIL
             cropped_nucleus = cv2.cvtColor(cropped_nucleus, cv2.COLOR_BGR2RGB)
             # convert to PIL format
             processed_image = Image.fromarray(cropped_nucleus)
@@ -180,3 +154,5 @@ class AttDataset(Dataset):
         segmented_image = Image.fromarray(segmented_image)
 
         return segmented_image
+    
+    
