@@ -37,7 +37,7 @@ image_encoder, image_encoder_output_dim = get_image_encoder(pretrained=True)
 attribute_sizes = [6]  # Replace with actual sizes of your tasks
 
 model = AttributePredictor(attribute_sizes, image_encoder_output_dim, image_encoder)
-checkpoint = torch.load('./log/best_model_nucleus.pth')
+checkpoint = torch.load('./log/best_model_SEB1.pth')
 model.load_state_dict(checkpoint['model'])
 model.eval()
 

@@ -17,7 +17,7 @@ import sys
 
 
 from att_dataset_nucleus import AttDataset
-from attribute_predictor_CBAM import AttributePredictor
+from attribute_predictor_SEBlocks import AttributePredictor
 
 # att_names = ['cell_size', 'cell_shape', 'nucleus_shape', 'nuclear_cytoplasmic_ratio', 'chromatin_density',
 #              'cytoplasm_vacuole', 'cytoplasm_texture', 'cytoplasm_colour', 'granule_type', 'granule_colour', 'granularity']
